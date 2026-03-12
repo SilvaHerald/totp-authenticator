@@ -27,11 +27,11 @@ jobs:
 
       - name: Build with Nuitka
         run: |
-          python -m nuitka --onedir --windows-console-mode=disable --output-dir=dist --assume-yes-for-downloads src/totp_authenticator/main.py
+          python -m nuitka --standalone --windows-console-mode=disable --output-dir=dist --output-filename=totp-auth.exe --assume-yes-for-downloads src/totp_authenticator/main.py
 
       - name: Create ZIP archive
         run: |
-          Compress-Archive -Path dist/main.dist/* -DestinationPath dist/TOTP-Authenticator-${{ github.ref_name }}-windows.zip
+          Compress-Archive -Path dist/totp-auth.dist/* -DestinationPath dist/TOTP-Authenticator-${{ github.ref_name }}-windows.zip
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
