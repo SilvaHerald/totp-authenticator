@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "totp-authenticator"
+version = "0.1.0"
+description = "A lightweight, offline TOTP authenticator for Windows. Get your 2FA codes without reaching for your phone."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "TOTP Authenticator Contributors" }]
+keywords = ["totp", "2fa", "authenticator", "otp", "security"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Utilities",
+]
+dependencies = ["pyotp>=2.9", "pyperclip>=1.8"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "ruff>=0.4", "nuitka>=2.0"]
+
+[project.scripts]
+totp-auth = "totp_authenticator.main:main"
+
+[project.urls]
+Homepage = "https://github.com/SilvaHerald/totp-authenticator"
+Repository = "https://github.com/SilvaHerald/totp-authenticator"
+Issues = "https://github.com/SilvaHerald/totp-authenticator/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

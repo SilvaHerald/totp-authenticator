@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Build with Nuitka
+        run: |
+          python -m nuitka --onedir --windows-console-mode=disable --output-dir=dist --assume-yes-for-downloads src/totp_authenticator/main.py
+
+      - name: Create ZIP archive
+        run: |
+          Compress-Archive -Path dist/main.dist/* -DestinationPath dist/TOTP-Authenticator-${{ github.ref_name }}-windows.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/TOTP-Authenticator-${{ github.ref_name }}-windows.zip
+          generate_release_notes: true
