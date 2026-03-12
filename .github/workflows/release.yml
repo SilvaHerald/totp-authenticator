@@ -27,7 +27,7 @@ jobs:
 
       - name: Build with Nuitka
         run: |
-          python -m nuitka --standalone --windows-console-mode=disable --output-dir=dist --output-filename=totp-auth.exe --assume-yes-for-downloads src/totp_authenticator/main.py
+          python -m nuitka --standalone --enable-plugin=tk-inter --windows-console-mode=disable --output-dir=dist --output-filename=totp-auth.exe --assume-yes-for-downloads src/totp_authenticator/main.py
 
       - name: Create ZIP archive
         run: |
