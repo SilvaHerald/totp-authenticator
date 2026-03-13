@@ -47,12 +47,44 @@ Items are loosely prioritized within each milestone.
 
 ---
 
+## 📥 v0.5.0 — Import & Protocol Support
+
+- [ ] Import accounts via `otpauth://` URI (deep link)
+- [ ] Import accounts by scanning QR code (webcam)
+- [ ] Export accounts as encrypted backup file
+- [ ] Restore accounts from backup file
+
+---
+
+## ☁️ v0.6.0 — Cloud Sync (E2EE)
+
+> Secrets are encrypted end-to-end before leaving the device — the server never sees plaintext keys.
+
+- [ ] Account system (sign up / log in) for sync identity
+- [ ] End-to-end encrypted secret sync across devices
+- [ ] Default hosted sync server (free tier)
+- [ ] Self-hosted sync server support (open source backend)
+- [ ] Conflict resolution for multi-device edits
+
+---
+
+## 📱 v0.7.0 — Mobile App (Android & iOS)
+
+- [ ] Flutter-based companion app (single codebase for Android + iOS)
+- [ ] QR code scanner to add accounts on mobile
+- [ ] Live OTP display with countdown timer (mirrors desktop experience)
+- [ ] Sync with desktop via v0.6 cloud sync backend
+- [ ] Biometric lock (fingerprint / Face ID)
+
+---
+
 ## 📦 v1.0.0 — Stable Release
 
-- [ ] Full multi-account support stabilized
+- [ ] Desktop + mobile feature parity stabilized
 - [ ] Comprehensive documentation and user guide
 - [ ] Signed Windows installer (`.exe`)
-- [ ] macOS build support
+- [ ] macOS desktop build support
+- [ ] Published to Google Play Store and Apple App Store
 
 ---
 
@@ -60,7 +92,7 @@ Items are loosely prioritized within each milestone.
 
 These are ideas that have been raised but not yet scheduled:
 
-- Backup & restore accounts (encrypted export)
 - Browser extension integration
 - TOTP token search / filter
 - Localization / i18n support
+- Watch app (Wear OS / watchOS)
