@@ -66,11 +66,11 @@ python -m nuitka --onedir --windows-console-mode=disable src/totp_authenticator/
 
 ## 📦 Project Structure
 
-Please see [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) for a detailed breakdown of the repository.
+Please see [PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) for a detailed breakdown of the repository.
 
 ## 🗺️ Roadmap
 
-Check out our [Roadmap](ROADMAP.md) to see planned features and upcoming updates.
+Check out our [Roadmap](docs/ROADMAP.md) to see planned features and upcoming updates.
 
 ## 🔒 Security & Privacy
 
