@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.4.0] - 2026-03-XX
+### Added
+- **Master Password**: You can now lock the app using a master password.
+- **Encrypt at Rest**: Local secrets configuration file is now encrypted using AES-128-CBC (Fernet) if a password is set.
+- **Auto-lock**: The application will automatically lock after a configurable period of inactivity.
+
 ## [0.3.0] - 2026-03-14
 
 ### Added

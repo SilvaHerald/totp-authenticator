@@ -1,19 +1,25 @@
 """TOTP Authenticator UI — tkinter-based desktop window (v0.2.0 multi-account)."""
 
+import time
 import tkinter as tk
 from tkinter import messagebox, simpledialog
 
 import pyperclip
 
 from totp_authenticator.core import get_code, get_remaining_seconds, validate_secret
+from totp_authenticator.crypto import InvalidPasswordError
 from totp_authenticator.storage import (
     Account,
     add_account,
     delete_account,
+    is_config_encrypted,
     load_accounts,
     load_settings,
+    remove_encryption,
     rename_account,
     save_settings,
+    set_encryption,
+    verify_password,
 )
 
 # ── Colour palettes (Catppuccin Mocha for Dark, Latte for Light) ───────────
@@ -54,14 +60,9 @@ class TOTPApp:
         self.root.resizable(False, False)
         self.root.attributes("-topmost", True)
 
-        self._accounts: list[Account] = load_accounts()
         self._settings = load_settings()
-        self._selected_id: str | None = (
-            self._accounts[0].id if self._accounts else None
-        )
         self.c = THEMES.get(self._settings.theme, THEMES["dark"])
 
-        # Restore window position or center it
         width, height = 620, 400
         if self._settings.window_x is not None and self._settings.window_y is not None:
             self.root.geometry(f"{width}x{height}+{self._settings.window_x}+{self._settings.window_y}")
@@ -70,11 +71,38 @@ class TOTPApp:
 
         self.root.configure(bg=self.c["bg"])
         self._copy_timer: str | None = None
+        self._current_key: bytes | None = None
+        self._last_activity = time.time()
+        self._update_job: str | None = None
 
         # Track window moves to save config
         self.root.bind("<Configure>", self._on_window_configure)
 
-        # Keyboard shortcuts
+        # Global activity tracking for auto-lock
+        for event in ("<Key>", "<Button>", "<Motion>", "<MouseWheel>"):
+            self.root.bind(event, self._on_user_activity, add="+")
+
+        if is_config_encrypted():
+            self._build_lock_screen()
+        else:
+            self._init_main_app()
+
+    def _on_user_activity(self, _event: tk.Event) -> None:  # type: ignore[type-arg]
+        """Reset the inactivity timer."""
+        self._last_activity = time.time()
+
+    def _init_main_app(self, key: bytes | None = None) -> None:
+        """Initialize or re-initialize the main application UI."""
+        self._current_key = key
+        self._accounts = load_accounts(self._current_key)
+        self._selected_id: str | None = (
+            self._accounts[0].id if self._accounts else None
+        )
+
+        # Clear lock screen if any
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
         self.root.bind("<Control-c>", lambda e: self._copy_code())
         self.root.bind("<Control-C>", lambda e: self._copy_code())
         self.root.bind("<Return>", lambda e: self._copy_code())
@@ -86,6 +114,35 @@ class TOTPApp:
 
         self._build_ui()
         self._refresh_sidebar()
+        self._last_activity = time.time()
+        self._update_loop()
+
+    def _lock_app(self) -> None:
+        """Lock the application and require password again."""
+        if not is_config_encrypted():
+            return
+
+        if self._update_job:
+            self.root.after_cancel(self._update_job)
+            self._update_job = None
+
+        self._current_key = None
+        self._accounts = []
+        self._selected_id = None
+
+        # Unbind shortcuts
+        keys_to_unbind = (
+            "<Control-c>", "<Control-C>", "<Return>",
+            "<Control-a>", "<Control-r>", "<Delete>",
+            "<Up>", "<Down>"
+        )
+        for key in keys_to_unbind:
+            self.root.unbind(key)
+
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        self._build_lock_screen()
         self._update_loop()
 
     # ── Build ──────────────────────────────────────────────────────────────────
@@ -142,6 +199,7 @@ class TOTPApp:
             ("+ Add", self._open_add_dialog),
             ("Rename", self._open_rename_dialog),
             ("Delete", self._open_delete_dialog),
+            ("Security", self._open_security_dialog),
         ]:
             btn = tk.Button(
                 self.btn_bar, text=text, font=("Segoe UI", 9),
@@ -357,8 +415,8 @@ class TOTPApp:
                     parent=dialog,
                 )
                 return
-            new_account = add_account(name, secret)
-            self._accounts = load_accounts()
+            new_account = add_account(name, secret, self._current_key)
+            self._accounts = load_accounts(self._current_key)
             self._selected_id = new_account.id
             self._refresh_sidebar()
             dialog.destroy()
@@ -392,8 +450,8 @@ class TOTPApp:
             parent=self.root,
         )
         if new_name and new_name.strip():
-            rename_account(account.id, new_name.strip())
-            self._accounts = load_accounts()
+            rename_account(account.id, new_name.strip(), self._current_key)
+            self._accounts = load_accounts(self._current_key)
             self._refresh_sidebar()
 
     def _open_delete_dialog(self) -> None:
@@ -409,8 +467,8 @@ class TOTPApp:
             parent=self.root,
         )
         if confirmed:
-            delete_account(account.id)
-            self._accounts = load_accounts()
+            delete_account(account.id, self._current_key)
+            self._accounts = load_accounts(self._current_key)
             self._selected_id = self._accounts[0].id if self._accounts else None
             self._refresh_sidebar()
 
@@ -441,6 +499,12 @@ class TOTPApp:
 
     def _update_loop(self) -> None:
         """Refresh the OTP code and countdown timer every second."""
+        if is_config_encrypted():
+            timeout_secs = self._settings.lock_timeout_minutes * 60
+            if time.time() - self._last_activity > timeout_secs:
+                self._lock_app()
+                return
+
         account = self._selected_account()
         if account:
             code = get_code(account.secret)
@@ -456,4 +520,148 @@ class TOTPApp:
                 self.timer_var.set("Secret key is invalid")
                 self.code_label.config(fg=self.c["red"])
 
-        self.root.after(1000, self._update_loop)
+        self._update_job = self.root.after(1000, self._update_loop)
+
+    # ── Lock Screen & Security ─────────────────────────────────────────────────
+
+    def _build_lock_screen(self) -> None:
+        """Build the master password lock screen."""
+        self.lock_frame = tk.Frame(self.root, bg=self.c["bg"])
+        self.lock_frame.pack(fill="both", expand=True)
+
+        tk.Label(
+            self.lock_frame, text="🔒 App Locked", font=("Segoe UI", 16, "bold"),
+            bg=self.c["bg"], fg=self.c["fg"],
+        ).pack(pady=(80, 20))
+
+        tk.Label(
+            self.lock_frame, text="Enter Master Password:", font=("Segoe UI", 10),
+            bg=self.c["bg"], fg=self.c["fg_dim"],
+        ).pack(pady=(0, 10))
+
+        self.pwd_entry = tk.Entry(
+            self.lock_frame, font=("Segoe UI", 14), bg=self.c["bg_entry"], fg=self.c["fg"],
+            relief="flat", insertbackground="white", width=20, show="*", justify="center",
+        )
+        self.pwd_entry.pack(pady=10)
+        self.pwd_entry.focus_set()
+
+        self.lbl_pwd_error = tk.Label(
+            self.lock_frame, text="", font=("Segoe UI", 9), bg=self.c["bg"], fg=self.c["red"]
+        )
+        self.lbl_pwd_error.pack()
+
+        btn = tk.Button(
+            self.lock_frame, text="Unlock", font=("Segoe UI", 11, "bold"),
+            bg=self.c["blue"], fg=self.c["bg"], relief="flat", padx=24, pady=6,
+            cursor="hand2", command=self._try_unlock,
+        )
+        btn.pack(pady=20)
+        self.root.bind("<Return>", lambda e: self._try_unlock())
+
+    def _try_unlock(self) -> None:
+        pwd = self.pwd_entry.get()
+        try:
+            key = verify_password(pwd)
+            self.root.unbind("<Return>")
+            self._init_main_app(key)
+        except InvalidPasswordError:
+            self.pwd_entry.delete(0, "end")
+            self.lbl_pwd_error.config(text="Incorrect password. Please try again.")
+
+    def _open_security_dialog(self) -> None:
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Security Settings")
+        dialog.geometry("380x380")
+        dialog.configure(bg=self.c["bg"])
+        dialog.resizable(False, False)
+        dialog.grab_set()
+        dialog.attributes("-topmost", True)
+
+        is_enc = is_config_encrypted()
+        status_text = "Status: Locked 🔒" if is_enc else "Status: Unlocked 🔓"
+        tk.Label(
+            dialog, text=status_text, font=("Segoe UI", 11, "bold"),
+            bg=self.c["bg"], fg=self.c["fg"]
+        ).pack(pady=16)
+
+        # Timeout setting
+        frame_time = tk.Frame(dialog, bg=self.c["bg"])
+        frame_time.pack(pady=10)
+        tk.Label(
+            frame_time, text="Auto-lock timeout (minutes):", font=("Segoe UI", 9),
+            bg=self.c["bg"], fg=self.c["fg"]
+        ).pack(side="left", padx=8)
+
+        timeout_var = tk.StringVar(value=str(self._settings.lock_timeout_minutes))
+        tk.Entry(
+            frame_time, textvariable=timeout_var, width=5, justify="center",
+            bg=self.c["bg_entry"], fg=self.c["fg"], relief="flat", insertbackground="white"
+        ).pack(side="left")
+
+        # Password setting
+        frame_pwd = tk.Frame(dialog, bg=self.c["bg"])
+        frame_pwd.pack(pady=10, fill="x", padx=20)
+
+        tk.Label(
+            frame_pwd, text="New Password:", font=("Segoe UI", 9),
+            bg=self.c["bg"], fg=self.c["fg"], anchor="w"
+        ).pack(fill="x")
+        pwd_entry = tk.Entry(
+            frame_pwd,
+            show="*",
+            bg=self.c["bg_entry"],
+            fg=self.c["fg"],
+            relief="flat",
+            insertbackground="white"
+        )
+        pwd_entry.pack(fill="x", pady=(4, 10))
+
+        def _save() -> None:
+            try:
+                mins = int(timeout_var.get())
+                self._settings.lock_timeout_minutes = max(1, mins)
+                save_settings(self._settings)
+            except ValueError:
+                pass
+
+            pwd = pwd_entry.get()
+            if pwd:
+                self._current_key = set_encryption(pwd, self._current_key)
+                messagebox.showinfo("Success", "Password updated successfully.", parent=dialog)
+            dialog.destroy()
+
+        def _remove() -> None:
+            msg = (
+                "Are you sure you want to remove password protection?\n"
+                "Secrets will be stored in plaintext."
+            )
+            if messagebox.askyesno("Remove Password", msg, parent=dialog):
+                if self._current_key:
+                    remove_encryption(self._current_key)
+                    self._current_key = None
+                    messagebox.showinfo("Success", "Password protection removed.", parent=dialog)
+                dialog.destroy()
+
+        tk.Button(
+            dialog,
+            text="Save Settings",
+            font=("Segoe UI", 10, "bold"),
+            bg=self.c["blue"],
+            fg=self.c["bg"],
+            relief="flat",
+            cursor="hand2",
+            command=_save,
+        ).pack(pady=10)
+
+        if is_enc:
+            tk.Button(
+                dialog,
+                text="Remove Password",
+                font=("Segoe UI", 9),
+                bg=self.c["red"],
+                fg=self.c["bg"],
+                relief="flat",
+                cursor="hand2",
+                command=_remove,
+            ).pack(pady=5)

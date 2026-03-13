@@ -9,11 +9,15 @@ from totp_authenticator.storage import (
     Settings,
     add_account,
     delete_account,
+    is_config_encrypted,
     load_accounts,
     load_settings,
+    remove_encryption,
     rename_account,
     save_accounts,
     save_settings,
+    set_encryption,
+    verify_password,
 )
 
 VALID_SECRET = "JBSWY3DPEHPK3PXP"
@@ -193,3 +197,40 @@ class TestSettings:
         assert loaded.theme == "light"
         assert loaded.window_x == 10
         assert loaded.window_y == 20
+
+
+class TestEncryption:
+    """Tests for master password and config encryption."""
+
+    def test_set_and_verify_encryption(self, patch_config):
+        # Create some initial plaintext data
+        add_account("Test", VALID_SECRET)
+        assert not is_config_encrypted()
+        
+        # Set encryption
+        key = set_encryption("my_password")
+        assert is_config_encrypted()
+        
+        # Verify
+        verified_key = verify_password("my_password")
+        assert key == verified_key
+        
+    def test_verify_fails_with_wrong_password(self):
+        add_account("Test", VALID_SECRET)
+        set_encryption("my_password")
+        
+        from totp_authenticator.crypto import InvalidPasswordError
+        with pytest.raises(InvalidPasswordError):
+            verify_password("wrong_password")
+            
+    def test_remove_encryption(self):
+        add_account("Test", VALID_SECRET)
+        key = set_encryption("my_password")
+        
+        remove_encryption(key)
+        assert not is_config_encrypted()
+        
+        # Data is back to plaintext, loadable without key
+        accounts = load_accounts()
+        assert len(accounts) == 1
+        assert accounts[0].name == "Test"

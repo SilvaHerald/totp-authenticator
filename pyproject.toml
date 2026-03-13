@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "totp-authenticator"
-version = "0.3.0"
+version = "0.4.0"
 description = "A lightweight, offline TOTP authenticator for Windows. Get your 2FA codes without reaching for your phone."
 readme = "README.md"
 license = { text = "MIT" }
@@ -24,7 +24,13 @@ classifiers = [
     "Topic :: Security",
     "Topic :: Utilities",
 ]
-dependencies = ["pyotp>=2.9", "pyperclip>=1.8", "pystray>=0.19.0", "pillow>=10.0.0"]
+dependencies = [
+    "pyperclip>=1.8.2",
+    "pyotp>=2.9.0",
+    "pystray>=0.19.5",
+    "pillow>=10.2.0",
+    "cryptography>=42.0.0"
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "ruff>=0.4", "nuitka>=2.0"]
