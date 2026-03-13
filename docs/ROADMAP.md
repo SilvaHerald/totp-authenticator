@@ -32,10 +32,10 @@ Items are loosely prioritized within each milestone.
 
 ## 🎨 v0.3.0 — UX Polish
 
-- [ ] System tray integration (minimize to tray)
-- [ ] Light / dark theme toggle
-- [ ] Custom window size and position persistence
-- [ ] Keyboard shortcuts (copy code, switch account)
+- [x] System tray integration (minimize to tray)
+- [x] Light / dark theme toggle
+- [x] Custom window size and position persistence
+- [x] Keyboard shortcuts (copy code, switch account)
 
 ---
 
