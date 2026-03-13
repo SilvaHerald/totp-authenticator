@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-13
+
+### Added
+- Multi-account support — store and manage multiple TOTP accounts
+- Account list sidebar with live codes for each account
+- Add, rename, and delete accounts via dedicated dialogs
+- Automatic migration from v0.1 single-secret config to multi-account format
+
+### Changed
+- Redesigned UI with two-panel layout (sidebar + main OTP view)
+- Window resized to 620×400 to accommodate account list
+- `storage.py` API replaced: `load_secret`/`save_secret` → `load_accounts`/`save_accounts` + `add_account`/`delete_account`/`rename_account`
+- Config file format updated: `{"secret": "..."}` → `{"accounts": [...]}`
+
 ## [0.1.0] - 2026-03-12
 
 ### Added

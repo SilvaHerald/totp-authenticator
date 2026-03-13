@@ -1,59 +1,145 @@
-"""Tests for totp_authenticator.storage module."""
+"""Tests for totp_authenticator.storage module (v0.2.0 multi-account API)."""
 
 import json
-import os
 
-from totp_authenticator.storage import load_secret, save_secret
+import pytest
+
+from totp_authenticator.storage import (
+    Account,
+    add_account,
+    delete_account,
+    load_accounts,
+    rename_account,
+    save_accounts,
+)
+
+VALID_SECRET = "JBSWY3DPEHPK3PXP"
 
 
-class TestStorage:
-    """Tests for save_secret() and load_secret()."""
+@pytest.fixture(autouse=True)
+def patch_config(tmp_path, monkeypatch):
+    """Redirect CONFIG_FILE to a temp path for every test."""
+    config_file = tmp_path / ".totp_config.json"
+    monkeypatch.setattr("totp_authenticator.storage.CONFIG_FILE", str(config_file))
+    return config_file
 
-    def test_save_and_load_roundtrip(self, tmp_path, monkeypatch):
-        """Saved secret should be retrievable via load_secret."""
-        config_file = tmp_path / ".totp_config.json"
-        monkeypatch.setattr("totp_authenticator.storage.CONFIG_FILE", str(config_file))
 
-        save_secret("JBSWY3DPEHPK3PXP")
-        assert load_secret() == "JBSWY3DPEHPK3PXP"
+class TestLoadAccounts:
+    """Tests for load_accounts()."""
 
-    def test_load_missing_file_returns_empty(self, tmp_path, monkeypatch):
-        """load_secret should return empty string if config doesn't exist."""
-        config_file = tmp_path / "nonexistent.json"
-        monkeypatch.setattr("totp_authenticator.storage.CONFIG_FILE", str(config_file))
+    def test_load_missing_file_returns_empty_list(self):
+        assert load_accounts() == []
 
-        assert load_secret() == ""
+    def test_load_corrupted_file_returns_empty_list(self, patch_config):
+        patch_config.write_text("NOT VALID JSON{{{", encoding="utf-8")
+        assert load_accounts() == []
 
-    def test_load_corrupted_file_returns_empty(self, tmp_path, monkeypatch):
-        """load_secret should handle corrupted JSON gracefully."""
-        config_file = tmp_path / ".totp_config.json"
-        config_file.write_text("NOT VALID JSON{{{", encoding="utf-8")
-        monkeypatch.setattr("totp_authenticator.storage.CONFIG_FILE", str(config_file))
+    def test_load_empty_accounts_key_returns_empty_list(self, patch_config):
+        patch_config.write_text('{"accounts": []}', encoding="utf-8")
+        assert load_accounts() == []
 
-        assert load_secret() == ""
 
-    def test_load_missing_key_returns_empty(self, tmp_path, monkeypatch):
-        """load_secret should return empty if JSON has no 'secret' key."""
-        config_file = tmp_path / ".totp_config.json"
-        config_file.write_text('{"other_key": "value"}', encoding="utf-8")
-        monkeypatch.setattr("totp_authenticator.storage.CONFIG_FILE", str(config_file))
+class TestAddAndSave:
+    """Tests for add_account() and save_accounts()."""
 
-        assert load_secret() == ""
+    def test_add_and_load_roundtrip(self):
+        account = add_account("GitHub", VALID_SECRET)
+        loaded = load_accounts()
+        assert len(loaded) == 1
+        assert loaded[0].name == "GitHub"
+        assert loaded[0].secret == VALID_SECRET
+        assert loaded[0].id == account.id
 
-    def test_save_overwrites_existing(self, tmp_path, monkeypatch):
-        """Saving a new secret should overwrite the previous one."""
-        config_file = tmp_path / ".totp_config.json"
-        monkeypatch.setattr("totp_authenticator.storage.CONFIG_FILE", str(config_file))
+    def test_add_multiple_accounts(self):
+        add_account("GitHub", VALID_SECRET)
+        add_account("Google", VALID_SECRET)
+        add_account("AWS", VALID_SECRET)
+        accounts = load_accounts()
+        assert len(accounts) == 3
+        names = [a.name for a in accounts]
+        assert "GitHub" in names
+        assert "Google" in names
+        assert "AWS" in names
 
-        save_secret("FIRST_SECRET")
-        save_secret("SECOND_SECRET")
-        assert load_secret() == "SECOND_SECRET"
+    def test_each_account_has_unique_id(self):
+        add_account("A", VALID_SECRET)
+        add_account("B", VALID_SECRET)
+        accounts = load_accounts()
+        ids = [a.id for a in accounts]
+        assert len(set(ids)) == 2
 
-    def test_config_file_is_valid_json(self, tmp_path, monkeypatch):
-        """The saved config file should be valid JSON."""
-        config_file = tmp_path / ".totp_config.json"
-        monkeypatch.setattr("totp_authenticator.storage.CONFIG_FILE", str(config_file))
+    def test_save_is_valid_json(self, patch_config):
+        save_accounts([Account(id="test-id", name="Test", secret=VALID_SECRET)])
+        data = json.loads(patch_config.read_text(encoding="utf-8"))
+        assert "accounts" in data
+        assert data["accounts"][0]["name"] == "Test"
 
-        save_secret("TESTSECRET")
-        data = json.loads(config_file.read_text(encoding="utf-8"))
-        assert data == {"secret": "TESTSECRET"}
+
+class TestDeleteAccount:
+    """Tests for delete_account()."""
+
+    def test_delete_account(self):
+        account = add_account("GitHub", VALID_SECRET)
+        add_account("Google", VALID_SECRET)
+        delete_account(account.id)
+        accounts = load_accounts()
+        assert len(accounts) == 1
+        assert accounts[0].name == "Google"
+
+    def test_delete_nonexistent_id_does_not_crash(self):
+        add_account("GitHub", VALID_SECRET)
+        delete_account("nonexistent-id-12345")  # should not raise
+        assert len(load_accounts()) == 1
+
+    def test_delete_all_accounts(self):
+        a = add_account("GitHub", VALID_SECRET)
+        delete_account(a.id)
+        assert load_accounts() == []
+
+
+class TestRenameAccount:
+    """Tests for rename_account()."""
+
+    def test_rename_account(self):
+        account = add_account("GitHub", VALID_SECRET)
+        rename_account(account.id, "GitLab")
+        accounts = load_accounts()
+        assert accounts[0].name == "GitLab"
+
+    def test_rename_only_affects_target(self):
+        a1 = add_account("GitHub", VALID_SECRET)
+        add_account("Google", VALID_SECRET)
+        rename_account(a1.id, "GitLab")
+        accounts = load_accounts()
+        names = {a.id: a.name for a in accounts}
+        assert names[a1.id] == "GitLab"
+        # Google stays unchanged
+        google = next(a for a in accounts if a.name == "Google")
+        assert google.name == "Google"
+
+    def test_rename_nonexistent_id_does_not_crash(self):
+        add_account("GitHub", VALID_SECRET)
+        rename_account("nonexistent-id", "Foo")  # should not raise
+        assert load_accounts()[0].name == "GitHub"
+
+
+class TestMigration:
+    """Tests for automatic migration from v0.1 single-secret format."""
+
+    def test_migration_from_v0_1_format(self, patch_config):
+        patch_config.write_text(
+            json.dumps({"secret": VALID_SECRET}), encoding="utf-8"
+        )
+        accounts = load_accounts()
+        assert len(accounts) == 1
+        assert accounts[0].name == "My Account"
+        assert accounts[0].secret == VALID_SECRET
+
+    def test_migration_rewrites_file_to_new_format(self, patch_config):
+        patch_config.write_text(
+            json.dumps({"secret": VALID_SECRET}), encoding="utf-8"
+        )
+        load_accounts()
+        data = json.loads(patch_config.read_text(encoding="utf-8"))
+        assert "accounts" in data
+        assert "secret" not in data
