@@ -33,3 +33,6 @@ Desktop.ini
 # PyInstaller (legacy)
 *.manifest
 *.log
+
+# Docs
+docs/implementation/*.md
