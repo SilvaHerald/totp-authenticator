@@ -17,6 +17,15 @@ class Account:
     secret: str
 
 
+@dataclass
+class Settings:
+    """Application preferences and window state."""
+
+    theme: str = "dark"
+    window_x: int | None = None
+    window_y: int | None = None
+
+
 def _migrate_legacy(data: dict) -> list[dict]:
     """Convert v0.1 single-secret format to multi-account list format.
 
@@ -64,10 +73,60 @@ def save_accounts(accounts: list[Account]) -> None:
     _write_raw([asdict(a) for a in accounts])
 
 
-def _write_raw(accounts: list[dict]) -> None:
-    """Write raw account dicts to disk."""
+def load_settings() -> Settings:
+    """Load the application settings from the config file.
+
+    Returns:
+        Settings object with loaded or default values.
+    """
+    if not os.path.exists(CONFIG_FILE):
+        return Settings()
+    try:
+        with open(CONFIG_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        settings_dict = data.get("settings", {})
+        return Settings(
+            theme=settings_dict.get("theme", "dark"),
+            window_x=settings_dict.get("window_x"),
+            window_y=settings_dict.get("window_y"),
+        )
+    except (json.JSONDecodeError, OSError, TypeError, AttributeError):
+        return Settings()
+
+
+def save_settings(settings: Settings) -> None:
+    """Persist the application settings to the config file.
+
+    This function updates the 'settings' key without modifying 'accounts'.
+    """
+    if not os.path.exists(CONFIG_FILE):
+        data = {"accounts": [], "settings": asdict(settings)}
+    else:
+        try:
+            with open(CONFIG_FILE, encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            data = {"accounts": []}
+        data["settings"] = asdict(settings)
+
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump({"accounts": accounts}, f, indent=2)
+        json.dump(data, f, indent=2)
+
+
+def _write_raw(accounts: list[dict]) -> None:
+    """Write raw account dicts to disk, preserving existing settings if any."""
+    data = {"accounts": accounts}
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, encoding="utf-8") as f:
+                old_data = json.load(f)
+                if "settings" in old_data:
+                    data["settings"] = old_data["settings"]
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
 
 
 def add_account(name: str, secret: str) -> Account:

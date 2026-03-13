@@ -1,4 +1,4 @@
-"""Tests for totp_authenticator.storage module (v0.2.0 multi-account API)."""
+"""Tests for totp_authenticator.storage."""
 
 import json
 
@@ -6,11 +6,14 @@ import pytest
 
 from totp_authenticator.storage import (
     Account,
+    Settings,
     add_account,
     delete_account,
     load_accounts,
+    load_settings,
     rename_account,
     save_accounts,
+    save_settings,
 )
 
 VALID_SECRET = "JBSWY3DPEHPK3PXP"
@@ -143,3 +146,50 @@ class TestMigration:
         data = json.loads(patch_config.read_text(encoding="utf-8"))
         assert "accounts" in data
         assert "secret" not in data
+
+
+class TestSettings:
+    """Tests for load_settings() and save_settings()."""
+
+    def test_load_settings_missing_file_returns_default(self):
+        settings = load_settings()
+        assert settings.theme == "dark"
+        assert settings.window_x is None
+        assert settings.window_y is None
+
+    def test_save_and_load_settings(self):
+        settings = Settings(theme="light", window_x=150, window_y=250)
+        save_settings(settings)
+        loaded = load_settings()
+        assert loaded.theme == "light"
+        assert loaded.window_x == 150
+        assert loaded.window_y == 250
+
+    def test_save_settings_creates_file_if_missing(self, patch_config):
+        settings = Settings(theme="light")
+        save_settings(settings)
+        assert patch_config.exists()
+        data = json.loads(patch_config.read_text(encoding="utf-8"))
+        assert data["settings"]["theme"] == "light"
+
+    def test_save_settings_does_not_overwrite_accounts(self):
+        add_account("Test", VALID_SECRET)
+        settings = Settings(theme="light", window_x=10, window_y=20)
+        save_settings(settings)
+        
+        # Accounts should still be there
+        accounts = load_accounts()
+        assert len(accounts) == 1
+        assert accounts[0].name == "Test"
+
+    def test_save_accounts_does_not_overwrite_settings(self):
+        settings = Settings(theme="light", window_x=10, window_y=20)
+        save_settings(settings)
+        
+        add_account("Test", VALID_SECRET)
+        
+        # Settings should still be there
+        loaded = load_settings()
+        assert loaded.theme == "light"
+        assert loaded.window_x == 10
+        assert loaded.window_y == 20

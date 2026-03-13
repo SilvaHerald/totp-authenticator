@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-14
+
+### Added
+- System tray integration — minimize app to tray icon instead of closing
+- Light and Dark themes — toggleable straight from the UI
+- Window state persistence — app remembers its previous screen position between launches
+- Global keyboard shortcuts: `Up`/`Down`/`Tab` for navigation, `Enter`/`Ctrl-c` to copy, `Ctrl-a` to add, etc.
+- Seamless, zero-downtime config migration to support new preferences schema
+
+### Changed
+- Config file now contains `accounts` and `settings` objects  
+
 ## [0.2.0] - 2026-03-13
 
 ### Added

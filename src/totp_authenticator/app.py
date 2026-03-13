@@ -11,20 +11,38 @@ from totp_authenticator.storage import (
     add_account,
     delete_account,
     load_accounts,
+    load_settings,
     rename_account,
+    save_settings,
 )
 
-# ── Colour palette (Catppuccin Mocha) ─────────────────────────────────────────
-BG = "#1e1e2e"
-BG_SIDEBAR = "#181825"
-BG_ENTRY = "#313244"
-FG = "#cdd6f4"
-FG_DIM = "#6c7086"
-FG_SELECTED = "#89b4fa"
-GREEN = "#a6e3a1"
-RED = "#f38ba8"
-BLUE = "#89b4fa"
-SURFACE = "#45475a"
+# ── Colour palettes (Catppuccin Mocha for Dark, Latte for Light) ───────────
+THEMES = {
+    "dark": {
+        "bg": "#1e1e2e",
+        "bg_sidebar": "#181825",
+        "bg_entry": "#313244",
+        "fg": "#cdd6f4",
+        "fg_dim": "#6c7086",
+        "fg_selected": "#89b4fa",
+        "green": "#a6e3a1",
+        "red": "#f38ba8",
+        "blue": "#89b4fa",
+        "surface": "#45475a",
+    },
+    "light": {
+        "bg": "#eff1f5",
+        "bg_sidebar": "#e6e9ef",
+        "bg_entry": "#dce0e8",
+        "fg": "#4c4f69",
+        "fg_dim": "#8c8fa1",
+        "fg_selected": "#1e66f5",
+        "green": "#40a02b",
+        "red": "#d20f39",
+        "blue": "#1e66f5",
+        "surface": "#ccd0da",
+    },
+}
 
 
 class TOTPApp:
@@ -33,15 +51,36 @@ class TOTPApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("TOTP Authenticator")
-        self.root.geometry("620x400")
         self.root.resizable(False, False)
-        self.root.configure(bg=BG)
         self.root.attributes("-topmost", True)
 
         self._accounts: list[Account] = load_accounts()
+        self._settings = load_settings()
         self._selected_id: str | None = (
             self._accounts[0].id if self._accounts else None
         )
+        self.c = THEMES.get(self._settings.theme, THEMES["dark"])
+
+        # Restore window position or center it
+        width, height = 620, 400
+        if self._settings.window_x is not None and self._settings.window_y is not None:
+            self.root.geometry(f"{width}x{height}+{self._settings.window_x}+{self._settings.window_y}")
+        else:
+            self.root.geometry(f"{width}x{height}")
+
+        self.root.configure(bg=self.c["bg"])
+
+        # Track window moves to save config
+        self.root.bind("<Configure>", self._on_window_configure)
+
+        # Keyboard shortcuts
+        self.root.bind("<Control-c>", lambda e: self._copy_code())
+        self.root.bind("<Return>", lambda e: self._copy_code())
+        self.root.bind("<Control-a>", lambda e: self._open_add_dialog())
+        self.root.bind("<Control-r>", lambda e: self._open_rename_dialog())
+        self.root.bind("<Delete>", lambda e: self._open_delete_dialog())
+        self.root.bind("<Up>", self._navigate_up)
+        self.root.bind("<Down>", self._navigate_down)
 
         self._build_ui()
         self._refresh_sidebar()
@@ -52,121 +91,131 @@ class TOTPApp:
     def _build_ui(self) -> None:
         """Construct the two-panel widget tree."""
         # ── Sidebar (left) ─────────────────────────────────────────────────────
-        sidebar = tk.Frame(self.root, bg=BG_SIDEBAR, width=190)
-        sidebar.pack(side="left", fill="y")
-        sidebar.pack_propagate(False)
+        self.sidebar = tk.Frame(self.root, bg=self.c["bg_sidebar"], width=190)
+        self.sidebar.pack(side="left", fill="y")
+        self.sidebar.pack_propagate(False)
 
-        tk.Label(
-            sidebar,
-            text="Accounts",
-            font=("Segoe UI", 10, "bold"),
-            bg=BG_SIDEBAR,
-            fg=FG_DIM,
-        ).pack(pady=(16, 6), padx=12, anchor="w")
+        # Header contains "Accounts" label and Theme Toggle button
+        header_frame = tk.Frame(self.sidebar, bg=self.c["bg_sidebar"])
+        header_frame.pack(fill="x", pady=(16, 6), padx=12)
 
-        # Account listbox
-        list_frame = tk.Frame(sidebar, bg=BG_SIDEBAR)
-        list_frame.pack(fill="both", expand=True, padx=8)
+        self.lbl_accounts = tk.Label(
+            header_frame, text="Accounts", font=("Segoe UI", 10, "bold"),
+            bg=self.c["bg_sidebar"], fg=self.c["fg_dim"],
+        )
+        self.lbl_accounts.pack(side="left")
 
-        self.listbox = tk.Listbox(
-            list_frame,
-            bg=BG_SIDEBAR,
-            fg=FG,
-            selectbackground=BG_ENTRY,
-            selectforeground=FG_SELECTED,
-            font=("Segoe UI", 10),
+        self.btn_theme_toggle = tk.Button(
+            header_frame,
+            text="☀️" if self._settings.theme == "dark" else "🌙",
+            font=("Segoe UI", 9),
+            bg=self.c["bg_sidebar"],
+            fg=self.c["fg_dim"],
             relief="flat",
             borderwidth=0,
-            highlightthickness=0,
-            activestyle="none",
             cursor="hand2",
+            command=self._toggle_theme,
+        )
+        self.btn_theme_toggle.pack(side="right")
+
+        # Account listbox
+        self.list_frame = tk.Frame(self.sidebar, bg=self.c["bg_sidebar"])
+        self.list_frame.pack(fill="both", expand=True, padx=8)
+
+        self.listbox = tk.Listbox(
+            self.list_frame, bg=self.c["bg_sidebar"], fg=self.c["fg"],
+            selectbackground=self.c["bg_entry"], selectforeground=self.c["fg_selected"],
+            font=("Segoe UI", 10), relief="flat", borderwidth=0,
+            highlightthickness=0, activestyle="none", cursor="hand2",
         )
         self.listbox.pack(fill="both", expand=True)
         self.listbox.bind("<<ListboxSelect>>", self._on_select)
 
         # Sidebar action buttons
-        btn_bar = tk.Frame(sidebar, bg=BG_SIDEBAR)
-        btn_bar.pack(fill="x", padx=8, pady=(6, 12))
+        self.btn_bar = tk.Frame(self.sidebar, bg=self.c["bg_sidebar"])
+        self.btn_bar.pack(fill="x", padx=8, pady=(6, 12))
 
+        self.sidebar_buttons = []
         for text, cmd in [
             ("+ Add", self._open_add_dialog),
             ("Rename", self._open_rename_dialog),
             ("Delete", self._open_delete_dialog),
         ]:
-            tk.Button(
-                btn_bar,
-                text=text,
-                font=("Segoe UI", 9),
-                bg=SURFACE,
-                fg=FG,
-                relief="flat",
-                padx=8,
-                pady=4,
-                cursor="hand2",
-                command=cmd,
-            ).pack(side="left", padx=2)
+            btn = tk.Button(
+                self.btn_bar, text=text, font=("Segoe UI", 9),
+                bg=self.c["surface"], fg=self.c["fg"], relief="flat",
+                padx=8, pady=4, cursor="hand2", command=cmd,
+            )
+            btn.pack(side="left", padx=2)
+            self.sidebar_buttons.append(btn)
 
         # ── Main panel (right) ─────────────────────────────────────────────────
-        main = tk.Frame(self.root, bg=BG)
-        main.pack(side="left", fill="both", expand=True)
+        self.main = tk.Frame(self.root, bg=self.c["bg"])
+        self.main.pack(side="left", fill="both", expand=True)
 
-        # Account name label
         self.account_name_var = tk.StringVar(value="")
-        tk.Label(
-            main,
-            textvariable=self.account_name_var,
-            font=("Segoe UI", 11, "bold"),
-            bg=BG,
-            fg=FG_DIM,
-        ).pack(pady=(28, 0))
+        self.lbl_acc_name = tk.Label(
+            self.main, textvariable=self.account_name_var,
+            font=("Segoe UI", 11, "bold"), bg=self.c["bg"], fg=self.c["fg_dim"],
+        )
+        self.lbl_acc_name.pack(pady=(28, 0))
 
-        # OTP code display
         self.code_var = tk.StringVar(value="------")
         self.code_label = tk.Label(
-            main,
-            textvariable=self.code_var,
-            font=("Courier New", 42, "bold"),
-            bg=BG,
-            fg=GREEN,
+            self.main, textvariable=self.code_var,
+            font=("Courier New", 42, "bold"), bg=self.c["bg"], fg=self.c["green"],
         )
         self.code_label.pack(pady=(4, 0))
 
-        # Countdown timer bar
         self.timer_var = tk.StringVar(value="")
-        tk.Label(
-            main,
-            textvariable=self.timer_var,
-            font=("Segoe UI", 9),
-            bg=BG,
-            fg=FG_DIM,
-        ).pack()
+        self.lbl_timer = tk.Label(
+            self.main, textvariable=self.timer_var,
+            font=("Segoe UI", 9), bg=self.c["bg"], fg=self.c["fg_dim"],
+        )
+        self.lbl_timer.pack()
 
-        # Copy button
         self.copy_btn = tk.Button(
-            main,
-            text="📋  Copy Code",
-            font=("Segoe UI", 11, "bold"),
-            bg=BLUE,
-            fg=BG,
-            relief="flat",
-            padx=24,
-            pady=8,
-            cursor="hand2",
-            command=self._copy_code,
+            self.main, text="📋  Copy Code", font=("Segoe UI", 11, "bold"),
+            bg=self.c["blue"], fg=self.c["bg"], relief="flat", padx=24, pady=8,
+            cursor="hand2", command=self._copy_code,
         )
         self.copy_btn.pack(pady=20)
 
-        # Empty-state hint
         self.hint_var = tk.StringVar(value="")
-        tk.Label(
-            main,
-            textvariable=self.hint_var,
-            font=("Segoe UI", 9),
-            bg=BG,
-            fg=FG_DIM,
-            wraplength=360,
-            justify="center",
-        ).pack()
+        self.lbl_hint = tk.Label(
+            self.main, textvariable=self.hint_var, font=("Segoe UI", 9),
+            bg=self.c["bg"], fg=self.c["fg_dim"], wraplength=360, justify="center",
+        )
+        self.lbl_hint.pack()
+
+    def _toggle_theme(self) -> None:
+        """Switch between light and dark themes and update UI."""
+        self._settings.theme = "light" if self._settings.theme == "dark" else "dark"
+        save_settings(self._settings)
+        self.c = THEMES[self._settings.theme]
+
+        self.root.configure(bg=self.c["bg"])
+        self.sidebar.configure(bg=self.c["bg_sidebar"])
+        self.lbl_accounts.configure(bg=self.c["bg_sidebar"], fg=self.c["fg_dim"])
+        self.btn_theme_toggle.configure(
+            bg=self.c["bg_sidebar"], fg=self.c["fg_dim"],
+            text="☀️" if self._settings.theme == "dark" else "🌙"
+        )
+        self.list_frame.configure(bg=self.c["bg_sidebar"])
+        self.listbox.configure(
+            bg=self.c["bg_sidebar"], fg=self.c["fg"],
+            selectbackground=self.c["bg_entry"], selectforeground=self.c["fg_selected"]
+        )
+        self.btn_bar.configure(bg=self.c["bg_sidebar"])
+        for btn in self.sidebar_buttons:
+            btn.configure(bg=self.c["surface"], fg=self.c["fg"])
+
+        self.main.configure(bg=self.c["bg"])
+        self.lbl_acc_name.configure(bg=self.c["bg"], fg=self.c["fg_dim"])
+        self.code_label.configure(bg=self.c["bg"])
+        self.lbl_timer.configure(bg=self.c["bg"], fg=self.c["fg_dim"])
+        self.lbl_hint.configure(bg=self.c["bg"], fg=self.c["fg_dim"])
+        self.copy_btn.configure(bg=self.c["blue"], fg=self.c["bg"])
 
     # ── Sidebar helpers ────────────────────────────────────────────────────────
 
@@ -212,6 +261,38 @@ class TOTPApp:
                 return i
         return None
 
+    def _navigate_up(self, _event: tk.Event = None) -> None:  # type: ignore[type-arg, assignment]
+        """Select the previous account via keyboard."""
+        if not self._accounts:
+            return
+        idx = self._index_of(self._selected_id) if self._selected_id else 0
+        idx = max(0, (idx or 0) - 1)
+        self.listbox.selection_clear(0, "end")
+        self.listbox.selection_set(idx)
+        self.listbox.activate(idx)
+        self.listbox.see(idx)
+        self._on_select(None)
+
+    def _navigate_down(self, _event: tk.Event = None) -> None:  # type: ignore[type-arg, assignment]
+        """Select the next account via keyboard."""
+        if not self._accounts:
+            return
+        idx = self._index_of(self._selected_id) if self._selected_id else -1
+        idx = min(len(self._accounts) - 1, (idx if idx is not None else -1) + 1)
+        self.listbox.selection_clear(0, "end")
+        self.listbox.selection_set(idx)
+        self.listbox.activate(idx)
+        self.listbox.see(idx)
+        self._on_select(None)
+
+    def _on_window_configure(self, event: tk.Event) -> None:  # type: ignore[type-arg]
+        """Save the window position when it is moved."""
+        if event.widget == self.root:
+            self._settings.window_x = self.root.winfo_x()
+            self._settings.window_y = self.root.winfo_y()
+            # We don't save to file immediately to avoid spamming disk IO;
+            # this gets saved via save_settings on Exit or Theme toggle.
+
     # ── Main panel helpers ─────────────────────────────────────────────────────
 
     def _refresh_main_panel(self) -> None:
@@ -235,7 +316,7 @@ class TOTPApp:
         dialog = tk.Toplevel(self.root)
         dialog.title("Add Account")
         dialog.geometry("360x180")
-        dialog.configure(bg=BG)
+        dialog.configure(bg=self.c["bg"])
         dialog.resizable(False, False)
         dialog.grab_set()
         dialog.attributes("-topmost", True)
@@ -244,18 +325,18 @@ class TOTPApp:
             [("Account Name:", ""), ("Secret Key:", "*")]
         ):
             tk.Label(
-                dialog, text=label_text, font=("Segoe UI", 10), bg=BG, fg=FG
+                dialog, text=label_text, font=("Segoe UI", 10), bg=self.c["bg"], fg=self.c["fg"]
             ).grid(row=row, column=0, padx=16, pady=(18 if row == 0 else 8, 4), sticky="w")
 
         name_entry = tk.Entry(
-            dialog, font=("Segoe UI", 10), bg=BG_ENTRY, fg=FG,
+            dialog, font=("Segoe UI", 10), bg=self.c["bg_entry"], fg=self.c["fg"],
             relief="flat", insertbackground="white", width=28,
         )
         name_entry.grid(row=0, column=1, padx=(0, 16), pady=(18, 4))
         name_entry.focus_set()
 
         secret_entry = tk.Entry(
-            dialog, font=("Segoe UI", 10), bg=BG_ENTRY, fg=FG,
+            dialog, font=("Segoe UI", 10), bg=self.c["bg_entry"], fg=self.c["fg"],
             relief="flat", insertbackground="white", width=28, show="*",
         )
         secret_entry.grid(row=1, column=1, padx=(0, 16), pady=(0, 4))
@@ -279,16 +360,16 @@ class TOTPApp:
             self._refresh_sidebar()
             dialog.destroy()
 
-        btn_frame = tk.Frame(dialog, bg=BG)
+        btn_frame = tk.Frame(dialog, bg=self.c["bg"])
         btn_frame.grid(row=2, column=0, columnspan=2, pady=14)
         tk.Button(
             btn_frame, text="Save", font=("Segoe UI", 10, "bold"),
-            bg=BLUE, fg=BG, relief="flat", padx=20, pady=5,
+            bg=self.c["blue"], fg=self.c["bg"], relief="flat", padx=20, pady=5,
             cursor="hand2", command=_save,
         ).pack(side="left", padx=6)
         tk.Button(
             btn_frame, text="Cancel", font=("Segoe UI", 10),
-            bg=SURFACE, fg=FG, relief="flat", padx=12, pady=5,
+            bg=self.c["surface"], fg=self.c["fg"], relief="flat", padx=12, pady=5,
             cursor="hand2", command=dialog.destroy,
         ).pack(side="left", padx=6)
 
@@ -340,10 +421,10 @@ class TOTPApp:
         code = get_code(account.secret)
         if code:
             pyperclip.copy(code)
-            self.copy_btn.config(text="✅  Copied!", bg=GREEN)
+            self.copy_btn.config(text="✅  Copied!", bg=self.c["green"])
             self.root.after(
                 1500,
-                lambda: self.copy_btn.config(text="📋  Copy Code", bg=BLUE),
+                lambda: self.copy_btn.config(text="📋  Copy Code", bg=self.c["blue"]),
             )
         else:
             messagebox.showerror(
@@ -362,10 +443,10 @@ class TOTPApp:
                 bar_filled = remaining // 2
                 bar_empty = 15 - bar_filled
                 self.timer_var.set(f"{remaining}s  {'█' * bar_filled}{'░' * bar_empty}")
-                self.code_label.config(fg=RED if remaining <= 5 else GREEN)
+                self.code_label.config(fg=self.c["red"] if remaining <= 5 else self.c["green"])
             else:
                 self.code_var.set("INVALID")
                 self.timer_var.set("Secret key is invalid")
-                self.code_label.config(fg=RED)
+                self.code_label.config(fg=self.c["red"])
 
         self.root.after(1000, self._update_loop)
