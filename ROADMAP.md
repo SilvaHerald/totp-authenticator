@@ -23,10 +23,10 @@ Items are loosely prioritized within each milestone.
 
 ## 🔭 v0.2.0 — Multi-Account Support
 
-- [ ] Store and manage multiple TOTP accounts
-- [ ] Display a list of accounts with their live codes
-- [ ] Add / rename / delete accounts
-- [ ] Import accounts via QR code scan or `otpauth://` URI
+- [x] Store and manage multiple TOTP accounts
+- [x] Display a list of accounts with their live codes
+- [x] Add / rename / delete accounts
+- [ ] Import accounts via QR code scan or `otpauth://` URI (moved to v0.5)
 
 ---
 
