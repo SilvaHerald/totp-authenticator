@@ -69,12 +69,14 @@ class TOTPApp:
             self.root.geometry(f"{width}x{height}")
 
         self.root.configure(bg=self.c["bg"])
+        self._copy_timer: str | None = None
 
         # Track window moves to save config
         self.root.bind("<Configure>", self._on_window_configure)
 
         # Keyboard shortcuts
         self.root.bind("<Control-c>", lambda e: self._copy_code())
+        self.root.bind("<Control-C>", lambda e: self._copy_code())
         self.root.bind("<Return>", lambda e: self._copy_code())
         self.root.bind("<Control-a>", lambda e: self._open_add_dialog())
         self.root.bind("<Control-r>", lambda e: self._open_rename_dialog())
@@ -96,17 +98,17 @@ class TOTPApp:
         self.sidebar.pack_propagate(False)
 
         # Header contains "Accounts" label and Theme Toggle button
-        header_frame = tk.Frame(self.sidebar, bg=self.c["bg_sidebar"])
-        header_frame.pack(fill="x", pady=(16, 6), padx=12)
+        self.header_frame = tk.Frame(self.sidebar, bg=self.c["bg_sidebar"])
+        self.header_frame.pack(fill="x", pady=(16, 6), padx=12)
 
         self.lbl_accounts = tk.Label(
-            header_frame, text="Accounts", font=("Segoe UI", 10, "bold"),
+            self.header_frame, text="Accounts", font=("Segoe UI", 10, "bold"),
             bg=self.c["bg_sidebar"], fg=self.c["fg_dim"],
         )
         self.lbl_accounts.pack(side="left")
 
         self.btn_theme_toggle = tk.Button(
-            header_frame,
+            self.header_frame,
             text="☀️" if self._settings.theme == "dark" else "🌙",
             font=("Segoe UI", 9),
             bg=self.c["bg_sidebar"],
@@ -196,6 +198,7 @@ class TOTPApp:
 
         self.root.configure(bg=self.c["bg"])
         self.sidebar.configure(bg=self.c["bg_sidebar"])
+        self.header_frame.configure(bg=self.c["bg_sidebar"])
         self.lbl_accounts.configure(bg=self.c["bg_sidebar"], fg=self.c["fg_dim"])
         self.btn_theme_toggle.configure(
             bg=self.c["bg_sidebar"], fg=self.c["fg_dim"],
@@ -420,9 +423,13 @@ class TOTPApp:
             return
         code = get_code(account.secret)
         if code:
-            pyperclip.copy(code)
             self.copy_btn.config(text="✅  Copied!", bg=self.c["green"])
-            self.root.after(
+            self.root.update_idletasks()  # Provide immediate visual feedback
+            pyperclip.copy(code)
+
+            if self._copy_timer:
+                self.root.after_cancel(self._copy_timer)
+            self._copy_timer = self.root.after(
                 1500,
                 lambda: self.copy_btn.config(text="📋  Copy Code", bg=self.c["blue"]),
             )
