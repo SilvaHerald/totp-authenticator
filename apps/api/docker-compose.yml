@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    container_name: totp-authenticator-server
+    ports:
+      - "8000:8000"
+    volumes:
+      - totp_data:/data
+    environment:
+      - SECRET_KEY=change-me-to-a-secure-random-string
+      - DATABASE_URL=sqlite:////data/totp_sync.db
+    restart: unless-stopped
+
+volumes:
+  totp_data:
