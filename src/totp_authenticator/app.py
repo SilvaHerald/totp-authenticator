@@ -164,10 +164,23 @@ class TOTPApp:
         )
         self.lbl_accounts.pack(side="left")
 
+        self.btn_security = tk.Button(
+            self.header_frame,
+            text="⚙️",
+            font=("Segoe UI", 10),
+            bg=self.c["bg_sidebar"],
+            fg=self.c["fg_dim"],
+            relief="flat",
+            borderwidth=0,
+            cursor="hand2",
+            command=self._open_security_dialog,
+        )
+        self.btn_security.pack(side="right", padx=(0, 8))
+
         self.btn_theme_toggle = tk.Button(
             self.header_frame,
             text="☀️" if self._settings.theme == "dark" else "🌙",
-            font=("Segoe UI", 9),
+            font=("Segoe UI", 10),
             bg=self.c["bg_sidebar"],
             fg=self.c["fg_dim"],
             relief="flat",
@@ -199,7 +212,6 @@ class TOTPApp:
             ("+ Add", self._open_add_dialog),
             ("Rename", self._open_rename_dialog),
             ("Delete", self._open_delete_dialog),
-            ("Security", self._open_security_dialog),
         ]:
             btn = tk.Button(
                 self.btn_bar, text=text, font=("Segoe UI", 9),
@@ -258,6 +270,7 @@ class TOTPApp:
         self.sidebar.configure(bg=self.c["bg_sidebar"])
         self.header_frame.configure(bg=self.c["bg_sidebar"])
         self.lbl_accounts.configure(bg=self.c["bg_sidebar"], fg=self.c["fg_dim"])
+        self.btn_security.configure(bg=self.c["bg_sidebar"], fg=self.c["fg_dim"])
         self.btn_theme_toggle.configure(
             bg=self.c["bg_sidebar"], fg=self.c["fg_dim"],
             text="☀️" if self._settings.theme == "dark" else "🌙"
