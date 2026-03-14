@@ -49,9 +49,9 @@ Items are loosely prioritized within each milestone.
 
 ## 📥 v0.5.0 — Import & Protocol Support
 
-- [ ] Import accounts via `otpauth://` URI (clipboard/text)
-- [ ] Export accounts as encrypted backup file
-- [ ] Restore accounts from backup file
+- [x] Import accounts via `otpauth://` URI (clipboard/text)
+- [x] Export accounts as encrypted backup file
+- [x] Restore accounts from backup file
 
 ---
 
