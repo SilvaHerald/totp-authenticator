@@ -59,11 +59,11 @@ Items are loosely prioritized within each milestone.
 
 > Secrets are encrypted end-to-end before leaving the device — the server never sees plaintext keys.
 
-- [ ] Account system (sign up / log in) for sync identity
-- [ ] End-to-end encrypted secret sync across devices
-- [ ] Default hosted sync server (free tier)
-- [ ] Self-hosted sync server support (open source backend)
-- [ ] Conflict resolution for multi-device edits
+- [x] Account system (sign up / log in) for sync identity
+- [x] End-to-end encrypted secret sync across devices
+- [x] Default hosted sync server (free tier)
+- [x] Self-hosted sync server support (open source backend)
+- [x] Conflict resolution for multi-device edits
 
 ---
 

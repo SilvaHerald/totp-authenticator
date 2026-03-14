@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "src/**"
+      - "apps/ui/src/**"
 
 jobs:
   lint-and-test:
@@ -22,12 +22,15 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
+        working-directory: apps/ui
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
       - name: Lint with ruff
+        working-directory: apps/ui
         run: ruff check src/
 
       - name: Run tests
+        working-directory: apps/ui
         run: pytest tests/ -v

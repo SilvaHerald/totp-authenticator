@@ -33,7 +33,10 @@ class Settings:
     theme: str = "dark"
     window_x: int | None = None
     window_y: int | None = None
+    always_on_top: bool = False
     lock_timeout_minutes: int = 5
+    sync_server_url: str = "http://127.0.0.1:8000"
+    sync_token: str = ""
 
 
 def read_raw_config() -> dict:
@@ -189,7 +192,10 @@ def load_settings() -> Settings:
         theme=settings_dict.get("theme", "dark"),
         window_x=settings_dict.get("window_x"),
         window_y=settings_dict.get("window_y"),
+        always_on_top=settings_dict.get("always_on_top", False),
         lock_timeout_minutes=settings_dict.get("lock_timeout_minutes", 5),
+        sync_server_url=settings_dict.get("sync_server_url", "http://127.0.0.1:8000"),
+        sync_token=settings_dict.get("sync_token", ""),
     )
 
 
