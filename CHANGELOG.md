@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [v0.4.0] - 2026-03-XX
+## [v0.5.0] - 2026-03-14
+### Added
+- **URI Protocol Import**: You can now import accounts by pasting an `otpauth://` link into the "Or paste otpauth:// URI" field inside the Add Account dialog.
+- **Encrypted Backup & Restore**: Added an automated process for securely exporting your accounts into a `.totp_backup` file protected by a custom password, and restoring them later. Available inside the Security Settings (⚙️).
+
+## [v0.4.0] - 2026-03-14
 ### Added
 - **Master Password**: You can now lock the app using a master password.
 - **Encrypt at Rest**: Local secrets configuration file is now encrypted using AES-128-CBC (Fernet) if a password is set.

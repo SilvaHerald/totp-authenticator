@@ -41,16 +41,15 @@ Items are loosely prioritized within each milestone.
 
 ## 🔒 v0.4.0 — Security Hardening
 
-- [ ] Optional PIN / password lock on app open
-- [ ] Encrypt stored secrets at rest
-- [ ] Auto-lock after inactivity timeout
+- [x] Optional PIN / password lock on app open
+- [x] Encrypt stored secrets at rest
+- [x] Auto-lock after inactivity timeout
 
 ---
 
 ## 📥 v0.5.0 — Import & Protocol Support
 
-- [ ] Import accounts via `otpauth://` URI (deep link)
-- [ ] Import accounts by scanning QR code (webcam)
+- [ ] Import accounts via `otpauth://` URI (clipboard/text)
 - [ ] Export accounts as encrypted backup file
 - [ ] Restore accounts from backup file
 

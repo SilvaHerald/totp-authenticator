@@ -2,21 +2,24 @@
 
 import time
 import tkinter as tk
-from tkinter import messagebox, simpledialog
+from tkinter import filedialog, messagebox, simpledialog
 
 import pyperclip
 
 from totp_authenticator.core import get_code, get_remaining_seconds, validate_secret
 from totp_authenticator.crypto import InvalidPasswordError
+from totp_authenticator.parser import InvalidURIError, parse_uri
 from totp_authenticator.storage import (
     Account,
     add_account,
+    create_backup,
     delete_account,
     is_config_encrypted,
     load_accounts,
     load_settings,
     remove_encryption,
     rename_account,
+    restore_backup,
     save_settings,
     set_encryption,
     verify_password,
@@ -389,7 +392,7 @@ class TOTPApp:
         """Open a dialog to add a new account."""
         dialog = tk.Toplevel(self.root)
         dialog.title("Add Account")
-        dialog.geometry("360x180")
+        dialog.geometry("360x250")
         dialog.configure(bg=self.c["bg"])
         dialog.resizable(False, False)
         dialog.grab_set()
@@ -415,6 +418,33 @@ class TOTPApp:
         )
         secret_entry.grid(row=1, column=1, padx=(0, 16), pady=(0, 4))
 
+        # URI Integration
+        lbl_uri = tk.Label(
+            dialog, text="Or paste otpauth:// URI:", font=("Segoe UI", 9),
+            bg=self.c["bg"], fg=self.c["fg_dim"]
+        )
+        lbl_uri.grid(row=2, column=0, columnspan=2, pady=(12, 2))
+
+        uri_entry = tk.Entry(
+            dialog, font=("Segoe UI", 9), bg=self.c["bg_entry"], fg=self.c["fg"],
+            relief="flat", insertbackground="white", width=48
+        )
+        uri_entry.grid(row=3, column=0, columnspan=2, padx=16, pady=(0, 4))
+
+        def _on_uri_change(*args: object) -> None:
+            uri = uri_entry.get().strip()
+            if uri.startswith("otpauth://"):
+                try:
+                    parsed = parse_uri(uri)
+                    name_entry.delete(0, "end")
+                    name_entry.insert(0, parsed.name)
+                    secret_entry.delete(0, "end")
+                    secret_entry.insert(0, parsed.secret)
+                except InvalidURIError:
+                    pass
+
+        uri_entry.bind("<KeyRelease>", _on_uri_change)
+
         def _save() -> None:
             name = name_entry.get().strip()
             secret = secret_entry.get().strip().replace(" ", "")
@@ -435,7 +465,7 @@ class TOTPApp:
             dialog.destroy()
 
         btn_frame = tk.Frame(dialog, bg=self.c["bg"])
-        btn_frame.grid(row=2, column=0, columnspan=2, pady=14)
+        btn_frame.grid(row=4, column=0, columnspan=2, pady=16)
         tk.Button(
             btn_frame, text="Save", font=("Segoe UI", 10, "bold"),
             bg=self.c["blue"], fg=self.c["bg"], relief="flat", padx=20, pady=5,
@@ -678,3 +708,75 @@ class TOTPApp:
                 cursor="hand2",
                 command=_remove,
             ).pack(pady=5)
+
+        def _export_backup() -> None:
+            path = filedialog.asksaveasfilename(
+                title="Export Encrypted Backup",
+                defaultextension=".totp_backup",
+                filetypes=[("TOTP Backup Files", "*.totp_backup")],
+                parent=dialog
+            )
+            if not path:
+                return
+            pwd = simpledialog.askstring(
+                "Backup Password", "Create a password to encrypt this backup:",
+                show="*", parent=dialog
+            )
+            if not pwd:
+                return
+            try:
+                create_backup(pwd, path, self._current_key)
+                messagebox.showinfo(
+                    "Success", f"Backup created successfully at:\n{path}", parent=dialog
+                )
+            except Exception as e:
+                messagebox.showerror("Export Failed", str(e), parent=dialog)
+
+        def _import_backup() -> None:
+            path = filedialog.askopenfilename(
+                title="Restore from Backup",
+                defaultextension=".totp_backup",
+                filetypes=[("TOTP Backup Files", "*.totp_backup")],
+                parent=dialog
+            )
+            if not path:
+                return
+            pwd = simpledialog.askstring(
+                "Backup Password", "Enter the password for this backup:",
+                show="*", parent=dialog
+            )
+            if not pwd:
+                return
+            try:
+                added = restore_backup(pwd, path, self._current_key)
+                self._accounts = load_accounts(self._current_key)
+                self._refresh_sidebar()
+                messagebox.showinfo("Success", f"Restored {added} new account(s).", parent=dialog)
+            except InvalidPasswordError:
+                messagebox.showerror(
+                    "Import Failed", "Incorrect password or corrupted backup.", parent=dialog
+                )
+            except Exception as e:
+                messagebox.showerror("Import Failed", str(e), parent=dialog)
+
+        tk.Frame(dialog, height=1, bg=self.c["fg_dim"]).pack(fill="x", padx=30, pady=10)
+
+        lbl_backup = tk.Label(
+            dialog, text="Data Backup & Restore:", font=("Segoe UI", 9, "bold"),
+            bg=self.c["bg"], fg=self.c["fg"]
+        )
+        lbl_backup.pack(pady=(0, 5))
+
+        backup_frame = tk.Frame(dialog, bg=self.c["bg"])
+        backup_frame.pack(pady=5)
+        tk.Button(
+            backup_frame, text="Export Backup", font=("Segoe UI", 9),
+            bg=self.c["surface"], fg=self.c["fg"], relief="flat",
+            cursor="hand2", command=_export_backup
+        ).pack(side="left", padx=5)
+
+        tk.Button(
+            backup_frame, text="Import Backup", font=("Segoe UI", 9),
+            bg=self.c["surface"], fg=self.c["fg"], relief="flat",
+            cursor="hand2", command=_import_backup
+        ).pack(side="left", padx=5)

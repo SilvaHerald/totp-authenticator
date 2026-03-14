@@ -268,3 +268,71 @@ def rename_account(account_id: str, new_name: str, key: bytes | None = None) -> 
             account.name = new_name
             break
     save_accounts(accounts, key)
+
+
+def create_backup(password: str, dest_path: str, key: bytes | None = None) -> None:
+    """Create an encrypted backup file of all current accounts."""
+    accounts = load_accounts(key)
+
+    salt = generate_salt()
+    backup_key = derive_key(password, salt)
+
+    accounts_json = json.dumps([asdict(a) for a in accounts])
+    encrypted = encrypt_data(accounts_json, backup_key)
+
+    backup_data = {
+        "is_encrypted": True,
+        "salt": base64.urlsafe_b64encode(salt).decode("utf-8"),
+        "encrypted_data": encrypted,
+    }
+
+    with open(dest_path, "w", encoding="utf-8") as f:
+        json.dump(backup_data, f, indent=2)
+
+
+def restore_backup(password: str, src_path: str, key: bytes | None = None) -> int:
+    """
+    Restore accounts from a backup file, merging with current accounts.
+
+    Returns:
+        Number of new accounts added.
+    Raises:
+        InvalidPasswordError: If the backup password is wrong.
+        ValueError: If the backup file is invalid or missing.
+    """
+    if not os.path.exists(src_path):
+        raise ValueError("Backup file does not exist.")
+
+    try:
+        with open(src_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as err:
+        raise ValueError("Invalid backup file format.") from err
+
+    if not data.get("is_encrypted") or "salt" not in data or "encrypted_data" not in data:
+        raise ValueError("Backup file is missing required encryption fields.")
+
+    salt = base64.urlsafe_b64decode(data["salt"].encode("utf-8"))
+    backup_key = derive_key(password, salt)
+
+    accounts_json_str = decrypt_data(data["encrypted_data"], backup_key)
+    try:
+        backup_accounts_data = json.loads(accounts_json_str)
+        backup_accounts = [Account(**a) for a in backup_accounts_data]
+    except Exception as err:
+        raise ValueError("Decrypted data is not valid.") from err
+
+    current_accounts = load_accounts(key)
+    current_ids = {a.id for a in current_accounts}
+
+    # Merge, keeping existing, adding new ones
+    added_count = 0
+    for a in backup_accounts:
+        if a.id not in current_ids:
+            current_accounts.append(a)
+            added_count += 1
+
+    if added_count > 0:
+        save_accounts(current_accounts, key)
+
+    return added_count
